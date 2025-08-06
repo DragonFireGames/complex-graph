@@ -1,0 +1,41 @@
+html, body {
+  margin: 0;
+  padding: 0;
+}
+canvas {
+  display: block;
+}
+
+.equationTxt, .equation {
+  position: absolute;
+  background: white;
+  border: 2px solid gray;
+  font-family: "Times New Roman", Times, serif;
+  font-size: 20px;
+  white-space: nowrap;
+}
+
+.equationTxt {
+  top: calc(100% - 80px);
+  left: calc(10%);
+  width: 7ch;
+  border-right: none;
+}
+#equation {
+  resize: none;
+  top: calc(100% - 60px);
+  /*left: calc(10% + 7ch);
+  width: calc(40% - 3.5ch);
+  border-left: none;*/
+  left: 10%;
+  width: calc(40% + 3.5ch);
+  outline: none;
+}
+#equation2 {
+  resize: none;
+  top: calc(100% - 60px);
+  left: calc(50% + 3.5ch);
+  width: calc(40% - 3.5ch);
+  border-left: none;
+  outline: none;
+}
