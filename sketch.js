@@ -643,7 +643,7 @@ function parse(tokens) {
   return tokens;
 }
 
-function compileShader(tree) {
+function compileShader(tree,fvar) {
   // Compiler
   var err = false;
   var namenum = 0;
@@ -778,7 +778,7 @@ function compileShader(tree) {
     }
     
     if (tok.type == "derivative") {
-      return `((${toCode(Syntax.ReplaceVar(tok.param,tok.value,tok.value+"+vec2(0.01,0)"))}-${toCode(Syntax.ReplaceVar(tok.param,tok.value,tok.value+"-vec2(0.01,0)"))})/0.02)`;
+      return `((${toCode(Syntax.ReplaceVar(tok.param,tok.value,tok.value+"+vec2(h0,0)"))}-${toCode(Syntax.ReplaceVar(tok.param,tok.value,tok.value+"-vec2(h0,0)"))})/(2.*h0))`;
     }
     
     if (tok.type == 'grouping') {
@@ -790,7 +790,7 @@ function compileShader(tree) {
     }
     
     var FunctionTable = {
-      "\\sqrt":["Sqrt(",",kk,ss)"],
+      "\\sqrt":["Sqrt(",",kk)"],
       "\\log":["Log(vec2(2,0),",",kk)"],
       "\\exp":["Exp(",")"],
       "\\ln":["Ln(",",kk)"],
@@ -806,24 +806,50 @@ function compileShader(tree) {
       "\\sec":["Sec(",")"],
       "\\csch":["Csch(",")"],
       "\\csc":["Csc(",")"],
-      "\\arcsinh":["Arcsinh(",",kk,ss)"],
-      "\\arcsin":["Arcsin(",",kk,ss)"],
-      "\\arccosh":["Arccosh(",",kk,ss)"],
-      "\\arccos":["Arccos(",",kk,ss)"],
+      "\\arcsinh":["Arcsinh(",",kk)"],
+      "\\arcsin":["Arcsin(",",kk)"],
+      "\\arccosh":["Arccosh(",",kk)"],
+      "\\arccos":["Arccos(",",kk)"],
       "\\arctanh":["Arctanh(",",kk)"],
       "\\arctan":["Arctan(",",kk)"],
       "\\arccoth":["Arccoth(",",kk)"],
       "\\arccot":["Arccot(",",kk)"],
-      "\\arcsech":["Arcsech(",",kk,ss)"],
-      "\\arcsec":["Arcsec(",",kk,ss)"],
-      "\\arccsch":["Arccsch(",",kk,ss)"],
-      "\\arccsc":["Arccsc(",",kk,ss)"],
+      "\\arcsech":["Arcsech(",",kk)"],
+      "\\arcsec":["Arcsec(",",kk)"],
+      "\\arccsch":["Arccsch(",",kk)"],
+      "\\arccsc":["Arccsc(",",kk)"],
       "\\erf":["Erf(",")"],
       "\\erfi":["Erfi(",")"],
-      "\\Gamma":["Gamma(",",kk)"],
-      "-":["(-",")"]
+      "\\Gamma":["Gamma(",",0.)"],
+      "-":["(-",")"],
+      "\\Re":["vec2(Re(","),0)"],
+      "\\Im":["vec2(Im(","),0)"],
+      "\\Arg":["vec2(Arg(",",kk),0)"],
+      "\\Abs":["vec2(Abs(","),0)"]
     }
     if (tok.type == 'function') {
+      if (!Syntax.ContainsVar(tok.param,fvar)) {
+        var FunctionTable2 = {
+          "\\sqrt": ["Sqrt(",",0.)"],
+          "\\log":["Log(vec2(2,0),",",0.)"],
+          "\\ln":["Ln(",",0.)"],
+          "\\arcsinh":["Arcsinh(",",0.)"],
+          "\\arcsin":["Arcsin(",",0.)"],
+          "\\arccosh":["Arccosh(",",0.)"],
+          "\\arccos":["Arccos(",",0.)"],
+          "\\arctanh":["Arctanh(",",0.)"],
+          "\\arctan":["Arctan(",",0.)"],
+          "\\arccoth":["Arccoth(",",0.)"],
+          "\\arccot":["Arccot(",",0.)"],
+          "\\arcsech":["Arcsech(",",0.)"],
+          "\\arcsec":["Arcsec(",",0.)"],
+          "\\arccsch":["Arccsch(",",0.)"],
+          "\\arccsc":["Arccsc(",",0.)"],
+          "\\Arg":["vec2(Arg(",",0.),0)"],
+        };
+        var fv = FunctionTable2[tok.name];
+        if (fv) return fv[0]+toCode(tok.param)+fv[1];
+      }
       var f = FunctionTable[tok.name];
       return f[0]+toCode(tok.param)+f[1];
     }
@@ -3167,6 +3193,7 @@ function draw() {
   theShader.setUniform("u_zoom", zoom);
   theShader.setUniform("u_offset", [offset.x,-offset.y]);
   theShader.setUniform("u_mouse", [mouseX,-mouseY]);
+  theShader.setUniform("u_selection", selection);
 
   scale(width,height);
   quad(-1,-1, -1,1, 1,1, 1,-1);
@@ -3209,16 +3236,13 @@ function windowResized() {
 
 function repShader(vert,frag) {
   frag = frag.replaceAll("#FUNCTION#",`
-vec2 F(vec2 ${fvar}, int kk) {
-  float ss = 1.0; if (fract(float(kk)/2.) == 1.) ss = -1.0;
+vec2 F(vec2 ${fvar}, float kk, vec2 a) {
   ${funct}
 }`+(dfunct?`
-vec2 dF(vec2 ${fvar}, int kk) {
-  float ss = 1.0; if (fract(float(kk)/2.) == 1.) ss = -1.0;
+vec2 dF(vec2 ${fvar}, float kk, vec2 a) {
   ${dfunct}
 }`:''))
-    .replaceAll("#DEVAL#",dfunct?`dF(z,#SELECTION#)*0.01`:`F(z+0.01,#SELECTION#)-r`)
-    .replaceAll("#SELECTION#",selection);
+    .replaceAll("#DEVAL#",dfunct?`dF(z,sel,ms)*h0`:`F(z+h0,sel,ms)-r`);
   theShader = createShader(vert,frag);
 }
 
@@ -3304,27 +3328,39 @@ function keyPressed() {
     //outputMQ.latex(mat[0]+compileLatex(funct));
     outputMQ.latex(mat[1]+`'\\left(${fvar}\\right) = `+compileLatex(dfunct));
     if (dfunct.type == "derivative") dfunct = false;
-    else dfunct = compileShader(dfunct);
-    funct = compileShader(funct);
+    else dfunct = compileShader(dfunct,fvar);
+    funct = compileShader(funct,fvar);
     repShader(vertSrc,fragSrc);
     saveData();
     return false;
   }
   
-  if (keyIsDown(17) && keyCode == 188 && keyIsPressed) {
+  //if (keyIsDown(17) && keyCode == 188 && keyIsPressed) {
+  if (keyCode == 40 && keyIsPressed) {
     selection--;
+    selection = Math.round(selection);
     console.log("k="+selection);
-    repShader(vertSrc,fragSrc);
     return false;
   }
   
-  if (keyIsDown(17) && keyCode == 190 && keyIsPressed) {
+  //if (keyIsDown(17) && keyCode == 190 && keyIsPressed) {
+  if (keyCode == 38 && keyIsPressed) {
     selection++;
+    selection = Math.round(selection);
     console.log("k="+selection);
-    repShader(vertSrc,fragSrc);
     return false;
   }
 }
+
+//var end = 0;
+//var start = 0;
+//setInterval(()=>selection = (selection + start + 0.01) % (start - end) - start,10);
+
+setInterval(()=>{
+  if (!window.keyCode) return;
+  if (keyCode == 37 && keyIsPressed) selection-=0.01;
+  if (keyCode == 39 && keyIsPressed) selection+=0.01;
+},10);
 
 // \sin \left(\cos \left(x\right)e^x+2xi\right)
 
